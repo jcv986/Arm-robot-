@@ -1,0 +1,34 @@
+/**
+ * A plain CPU-burning thread that never touches the MotorController.
+ *
+ * Used in the Task 3/4/5 demos to play the role of the Motion Planner
+ * "executing and delaying the release of the resource": it just keeps
+ * the CPU busy at medium priority for a fixed duration, competing with
+ * Logger for processor time while SafetyMonitor is blocked.
+ */
+public class CpuLoadThread extends Thread {
+
+    private final long durationMillis;
+    private final EventLogger logger;
+
+    public CpuLoadThread(String name, int priority, long durationMillis, EventLogger logger) {
+        super(name);
+        setPriority(priority);
+        this.durationMillis = durationMillis;
+        this.logger = logger;
+    }
+
+    @Override
+    public void run() {
+        logger.log(getName() + " starting CPU-bound work (priority=" + getPriority()
+                + "), does not touch MotorController");
+
+        long endTime = System.nanoTime() + durationMillis * 1_000_000L;
+        long counter = 0;
+        while (System.nanoTime() < endTime) {
+            counter++;
+        }
+
+        logger.log(getName() + " finished CPU-bound work.");
+    }
+}
