@@ -1,0 +1,58 @@
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+
+/**
+ * Simple thread-safe logger.
+ * Every line that gets logged is stamped with the number of milliseconds
+ * that have passed since this EventLogger object was created. The line is
+ * printed to the console in a human-readable form (optional), and written
+ * to the log file as a CSV row (Timestamp_ms,Event) so the log can be
+ * opened directly in Excel/Sheets for the Task 6 tables and charts
+ * required by the handout.
+ */
+public class EventLogger {
+
+    private final PrintWriter fileOut;
+    private final long referenceTime = System.nanoTime();
+    private final boolean printToConsole;
+
+    public EventLogger(String logFileName) throws IOException {
+        this(logFileName, true);
+    }
+
+    public EventLogger(String logFileName, boolean printToConsole) throws IOException {
+        boolean fileAlreadyExists = new File(logFileName).exists();
+
+        this.fileOut = new PrintWriter(new FileWriter(logFileName, true));
+        this.printToConsole = printToConsole;
+
+        // Write a CSV header once, only when the file is first created.
+        if (!fileAlreadyExists) {
+            fileOut.println("Timestamp_ms,Event");
+            fileOut.flush();
+        }
+    }
+
+    /** Writes one timestamped line to console (optional) and one CSV row to the log file. */
+    public synchronized void log(String message) {
+        double elapsedMs = (System.nanoTime() - referenceTime) / 1_000_000.0;
+
+        if (printToConsole) {
+            System.out.println(String.format("[t+%8.2fms] %s", elapsedMs, message));
+        }
+
+        fileOut.println(String.format("%.2f,%s", elapsedMs, csvEscape(message)));
+        fileOut.flush();
+    }
+
+    /** Wraps a field in quotes and doubles any internal quotes, per standard CSV escaping. */
+    private static String csvEscape(String field) {
+        return "\"" + field.replace("\"", "\"\"") + "\"";
+    }
+
+    public void close() {
+        fileOut.close();
+    }
+}
