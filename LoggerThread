@@ -1,0 +1,16 @@
+/**
+ * Logger - the LOW priority real-time thread.
+ * Represents the part of the system that just records system activity,
+ * so it is the least important of the three and, unmanaged, is the one
+ * that can end up hogging the MotorController and causing priority
+ * inversion for SafetyMonitor.
+ */
+public class LoggerThread extends ArmTaskThread {
+
+    public LoggerThread(MotorController controller, long outsideWorkMillis,
+                         long criticalWorkMillis, int iterations,
+                         EventLogger logger, boolean contentionSensitive) {
+        super("Logger", Thread.MIN_PRIORITY, controller,
+                outsideWorkMillis, criticalWorkMillis, iterations, logger, contentionSensitive);
+    }
+}
