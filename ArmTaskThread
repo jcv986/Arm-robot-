@@ -1,0 +1,101 @@
+/**
+ * Common behaviour shared by the three real-time threads described in the
+ * handout (Safety Monitor, Motion Planner, Logger): each one repeatedly
+ * does some "outside" work, then requests the shared MotorController,
+ * does some "critical" work while holding it, then releases it again.
+ *
+ * SafetyMonitorThread, MotionPlannerThread and LoggerThread each extend
+ * this class and simply fix their own name/priority - the actual
+ * scheduling and resource-access logic lives here so it isn't repeated
+ * three times.
+ */
+public abstract class ArmTaskThread extends Thread {
+
+    private final MotorController controller;
+    private final long outsideWorkMillis;
+    private final long criticalWorkMillis;
+    private final int iterations;
+    private final EventLogger logger;
+    private final boolean contentionSensitive;
+    private final int startingPriority;
+
+    private long lastWaitMillis = 0;
+    private long totalWaitMillis = 0;
+
+    protected ArmTaskThread(String name, int priority, MotorController controller,
+                             long outsideWorkMillis, long criticalWorkMillis, int iterations,
+                             EventLogger logger, boolean contentionSensitive) {
+        super(name);
+        setPriority(priority);
+        this.startingPriority = priority;
+        this.controller = controller;
+        this.outsideWorkMillis = outsideWorkMillis;
+        this.criticalWorkMillis = criticalWorkMillis;
+        this.iterations = iterations;
+        this.logger = logger;
+        this.contentionSensitive = contentionSensitive;
+    }
+
+    @Override
+    public void run() {
+        for (int cycle = 1; cycle <= iterations; cycle++) {
+            logger.log(getName() + " starting cycle " + cycle + "/" + iterations
+                    + " (priority=" + getPriority() + ")");
+
+            doWork(outsideWorkMillis, false);
+
+            try {
+                long waited = controller.acquire();
+                lastWaitMillis = waited;
+                totalWaitMillis += waited;
+            } catch (InterruptedException e) {
+                logger.log(getName() + " interrupted while waiting.");
+                return;
+            }
+
+            doWork(criticalWorkMillis, contentionSensitive);
+            controller.release();
+        }
+        logger.log(getName() + " finished all cycles.");
+    }
+
+    /**
+     * Simulates work for roughly "millis" milliseconds.
+     *
+     * When watchForBoost is true, the work is done in small 100ms chunks
+     * and stops early the moment this thread's priority is raised above
+     * the priority it started with. That is how the "Logger holds the
+     * resource too long" behaviour in Tasks 3-5 is made deterministic:
+     * once priority inheritance or priority ceiling boosts this thread,
+     * it immediately finishes up and releases the resource, exactly the
+     * way those two protocols are supposed to behave. Relying on the
+     * underlying OS scheduler to actually preempt threads by Java
+     * priority alone is not reliable enough on a normal desktop JVM to
+     * demonstrate the effect consistently.
+     */
+    private void doWork(long millis, boolean watchForBoost) {
+        if (millis <= 0) return;
+
+        if (watchForBoost) {
+            long chunk = 100;
+            long elapsed = 0;
+            while (elapsed < millis && getPriority() <= startingPriority) {
+                pause(chunk);
+                elapsed += chunk;
+            }
+        } else {
+            pause(millis);
+        }
+    }
+
+    private void pause(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public long getLastWaitMillis() { return lastWaitMillis; }
+    public long getTotalWaitMillis() { return totalWaitMillis; }
+}
