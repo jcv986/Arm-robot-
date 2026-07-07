@@ -1,0 +1,33 @@
+/**
+ * Task 1 & 2: starts the three robotic-arm threads (Safety Monitor,
+ * Motion Planner, Logger), each with a different Java thread priority,
+ * all sharing one MotorController. The console/log output shows each
+ * thread's execution, its access to the shared resource, and a
+ * timestamp for every event.
+ *
+ * Mutual exclusion (Task 2) is enforced inside MotorController's
+ * synchronized acquire()/release() methods; the "inUse" check there
+ * would print a RACE CONDITION line if two threads were ever inside
+ * at once.
+ */
+public class Task1_BasicDemo {
+    public static void main(String[] args) throws Exception {
+        EventLogger logger = new EventLogger("task1_log.csv");
+        MotorController controller = new MotorController(MotorController.PriorityMode.NONE, 0, logger);
+
+        SafetyMonitorThread safetyMonitor = new SafetyMonitorThread(controller, 300, 200, 5, logger, false);
+        MotionPlannerThread motionPlanner = new MotionPlannerThread(controller, 300, 200, 5, logger, false);
+        LoggerThread loggerThread = new LoggerThread(controller, 300, 200, 5, logger, false);
+
+        safetyMonitor.start();
+        motionPlanner.start();
+        loggerThread.start();
+
+        safetyMonitor.join();
+        motionPlanner.join();
+        loggerThread.join();
+
+        logger.log("All threads finished. No 'RACE CONDITION DETECTED' line above => mutual exclusion held.");
+        logger.close();
+    }
+}
