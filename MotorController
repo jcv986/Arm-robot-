@@ -1,0 +1,98 @@
+/**
+ * MotorController - the single shared critical resource in the system.
+ *
+ * All three real-time threads (Safety Monitor, Motion Planner, Logger)
+ * must go through acquire() / release() to use it, so only one thread
+ * can ever be "inside" it at a time (mutual exclusion, Task 2).
+ *
+ * The same class is reused for Tasks 3, 4 and 5 by simply changing the
+ * PriorityMode it is constructed with:
+ *   NONE        -> plain synchronized access, priority inversion can occur (Task 3)
+ *   INHERITANCE -> the thread holding the lock temporarily inherits the
+ *                  priority of the highest-priority thread waiting on it (Task 4)
+ *   CEILING     -> every thread that enters the resource is bumped up to a
+ *                  fixed "ceiling" priority for as long as it holds it (Task 5)
+ */
+public class MotorController {
+
+    public enum PriorityMode { NONE, INHERITANCE, CEILING }
+
+    private final PriorityMode mode;
+    private final int ceilingPriority;
+    private final EventLogger logger;
+
+    private boolean busy = false;
+    private Thread currentOwner = null;
+    private int ownerBasePriority = -1;
+
+    // Simple flag used to prove (Task 2) that two threads never hold the
+    // resource at the same time.
+    private volatile boolean inUse = false;
+
+    public MotorController(PriorityMode mode, int ceilingPriority, EventLogger logger) {
+        this.mode = mode;
+        this.ceilingPriority = ceilingPriority;
+        this.logger = logger;
+    }
+
+    /**
+     * Requests exclusive access to the motor controller. The calling
+     * thread blocks here until it is free. Returns how long (ms) the
+     * caller had to wait.
+     */
+    public synchronized long acquire() throws InterruptedException {
+        Thread requester = Thread.currentThread();
+        long waitStart = System.nanoTime();
+
+        while (busy) {
+            if (mode == PriorityMode.INHERITANCE && currentOwner != null
+                    && requester.getPriority() > currentOwner.getPriority()) {
+                logger.log(String.format(
+                    "PRIORITY INHERITANCE: %s (priority %d) temporarily raised to %d because it blocks %s (priority %d)",
+                    currentOwner.getName(), currentOwner.getPriority(), requester.getPriority(),
+                    requester.getName(), requester.getPriority()));
+                currentOwner.setPriority(requester.getPriority());
+            }
+            logger.log(requester.getName() + " BLOCKED waiting for MotorController (currently held by "
+                    + (currentOwner != null ? currentOwner.getName() : "?") + ")");
+            wait();
+        }
+
+        busy = true;
+        currentOwner = requester;
+        ownerBasePriority = requester.getPriority();
+
+        if (mode == PriorityMode.CEILING && requester.getPriority() != ceilingPriority) {
+            logger.log(String.format("PRIORITY CEILING: %s raised from %d to ceiling priority %d",
+                    requester.getName(), requester.getPriority(), ceilingPriority));
+            requester.setPriority(ceilingPriority);
+        }
+
+        long waitedMillis = (System.nanoTime() - waitStart) / 1_000_000;
+        logger.log(requester.getName() + " ACQUIRED MotorController (waited " + waitedMillis + " ms)");
+
+        if (inUse) {
+            logger.log("*** RACE CONDITION DETECTED: resource was already marked occupied! ***");
+        }
+        inUse = true;
+
+        return waitedMillis;
+    }
+
+    /** Gives up exclusive access, restoring the caller's original priority if it was changed. */
+    public synchronized void release() {
+        Thread requester = Thread.currentThread();
+        inUse = false;
+
+        if (requester.getPriority() != ownerBasePriority) {
+            logger.log(String.format("Restoring %s priority from %d back to %d",
+                    requester.getName(), requester.getPriority(), ownerBasePriority));
+            requester.setPriority(ownerBasePriority);
+        }
+
+        logger.log(requester.getName() + " RELEASED MotorController");
+        busy = false;
+        currentOwner = null;
+        notifyAll();
+    }
+}
