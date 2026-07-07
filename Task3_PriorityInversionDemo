@@ -1,0 +1,39 @@
+/**
+ * Task 3: classic priority inversion scenario.
+ *
+ *   1. Logger (low priority) acquires the MotorController and holds it
+ *      for a long simulated task.
+ *   2. Shortly after, SafetyMonitor (high priority) requests the
+ *      MotorController and blocks, because Logger still holds it.
+ *   3. Shortly after that, MotionPlanner (medium priority) starts pure
+ *      CPU-bound work that competes with Logger for the processor,
+ *      delaying Logger's release of the resource - and therefore
+ *      delaying SafetyMonitor even further.
+ *
+ * No priority-management protocol is active here (PriorityMode.NONE),
+ * so this run establishes the "bad" baseline behaviour.
+ */
+public class Task3_PriorityInversionDemo {
+    public static void main(String[] args) throws Exception {
+        EventLogger logger = new EventLogger("task3_log.csv");
+        MotorController controller = new MotorController(MotorController.PriorityMode.NONE, 0, logger);
+
+        LoggerThread lowLogger = new LoggerThread(controller, 0, 4000, 1, logger, true);
+        SafetyMonitorThread highSafety = new SafetyMonitorThread(controller, 0, 200, 1, logger, false);
+        CpuLoadThread mediumPlanner = new CpuLoadThread("MotionPlanner", Thread.NORM_PRIORITY, 3500, logger);
+
+        lowLogger.start();
+        Thread.sleep(300);   // let Logger acquire the resource first
+        highSafety.start();
+        Thread.sleep(500);   // let SafetyMonitor register as blocked
+        mediumPlanner.start();
+
+        lowLogger.join();
+        highSafety.join();
+        mediumPlanner.join();
+
+        logger.log("RESULT: SafetyMonitor waited " + highSafety.getLastWaitMillis()
+                + " ms for the MotorController (priority inversion baseline, no management).");
+        logger.close();
+    }
+}
