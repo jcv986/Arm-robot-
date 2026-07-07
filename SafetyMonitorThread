@@ -1,0 +1,15 @@
+/**
+ * Safety Monitor - the HIGH priority real-time thread.
+ * Represents the part of the system that watches for emergency
+ * conditions and needs to stop the arm as quickly as possible, so it
+ * must never be kept waiting for the MotorController for long.
+ */
+public class SafetyMonitorThread extends ArmTaskThread {
+
+    public SafetyMonitorThread(MotorController controller, long outsideWorkMillis,
+                                long criticalWorkMillis, int iterations,
+                                EventLogger logger, boolean contentionSensitive) {
+        super("SafetyMonitor", Thread.MAX_PRIORITY, controller,
+                outsideWorkMillis, criticalWorkMillis, iterations, logger, contentionSensitive);
+    }
+}
