@@ -1,0 +1,32 @@
+/**
+ * Task 4: same scenario as Task 3, but the MotorController is now
+ * constructed with PriorityMode.INHERITANCE. As soon as SafetyMonitor
+ * (high) blocks on Logger (low), Logger's priority is temporarily
+ * raised to match SafetyMonitor's, so MotionPlanner's CPU-bound work
+ * can no longer starve Logger of the processor. This should reduce or
+ * eliminate the extra delay observed in Task 3.
+ */
+public class Task4_PriorityInheritanceDemo {
+    public static void main(String[] args) throws Exception {
+        EventLogger logger = new EventLogger("task4_log.csv");
+        MotorController controller = new MotorController(MotorController.PriorityMode.INHERITANCE, 0, logger);
+
+        LoggerThread lowLogger = new LoggerThread(controller, 0, 4000, 1, logger, true);
+        SafetyMonitorThread highSafety = new SafetyMonitorThread(controller, 0, 200, 1, logger, false);
+        CpuLoadThread mediumPlanner = new CpuLoadThread("MotionPlanner", Thread.NORM_PRIORITY, 3500, logger);
+
+        lowLogger.start();
+        Thread.sleep(300);
+        highSafety.start();
+        Thread.sleep(500);
+        mediumPlanner.start();
+
+        lowLogger.join();
+        highSafety.join();
+        mediumPlanner.join();
+
+        logger.log("RESULT: SafetyMonitor waited " + highSafety.getLastWaitMillis()
+                + " ms for the MotorController (priority inheritance enabled).");
+        logger.close();
+    }
+}
