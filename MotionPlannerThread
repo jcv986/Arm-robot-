@@ -1,0 +1,14 @@
+/**
+ * Motion Planner - the MEDIUM priority real-time thread.
+ * Represents the part of the system that sends movement commands to
+ * the motor via the shared MotorController.
+ */
+public class MotionPlannerThread extends ArmTaskThread {
+
+    public MotionPlannerThread(MotorController controller, long outsideWorkMillis,
+                                long criticalWorkMillis, int iterations,
+                                EventLogger logger, boolean contentionSensitive) {
+        super("MotionPlanner", Thread.NORM_PRIORITY, controller,
+                outsideWorkMillis, criticalWorkMillis, iterations, logger, contentionSensitive);
+    }
+}
